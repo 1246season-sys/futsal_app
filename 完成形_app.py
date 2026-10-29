@@ -9,46 +9,30 @@ st.markdown(
     "<h1 style='color: #FFD700;'>⚽ フットサル成績管理アプリ</h1>",
     unsafe_allow_html=True,
 )
-st.caption("🔒 プライベートファイル管理モード（端末別・データ永続化）")
+st.caption("🔄 自動保存・自動復元モード")
 
-# セッション状態の初期化
+# --- 1. 自動復元（URLからデータを自動読み込み） ---
 if "matches" not in st.session_state:
-  st.session_state.matches = []
+  try:
+    # URLの中にデータが残っていれば自動で読み込む
+    saved_param = st.query_params.get("data", "")
+    if saved_param:
+      st.session_state.matches = json.loads(saved_param)
+    else:
+      st.session_state.matches = []
+  except Exception:
+    st.session_state.matches = []
 
-# --- 💾 データのバックアップ（保存・読み込み）エリア ---
-with st.expander("📂 データの保存・読み込み（機種変やブラウザ閉じる用）", expanded=False):
-  st.write(
-      "ブラウザを閉じてもデータを保持するため、定期的にデータをファイルとして"
-      "ダウンロードして保存できます。"
-  )
 
-  # 1. データの書き出し（ダウンロード）
-  json_data = json.dumps(st.session_state.matches, ensure_ascii=False)
-  st.download_button(
-      label="📥 成績データをファイルに保存（ダウンロード）",
-      data=json_data,
-      file_name="futsal_matches.json",
-      mime="application/json",
-  )
+# --- 2. 自動保存関数（データを変更した瞬間にURLへ自動書き込み） ---
+def auto_save():
+  try:
+    st.query_params["data"] = json.dumps(st.session_state.matches)
+  except Exception:
+    pass
 
-  # 2. データの読み込み（アップロード）
-  uploaded_file = st.file_uploader(
-      "📤 保存したファイルからデータを復元（アップロード）",
-      type=["json"],
-  )
-  if uploaded_file is not None:
-    try:
-      loaded_matches = json.load(uploaded_file)
-      if isinstance(loaded_matches, list):
-        st.session_state.matches = loaded_matches
-        st.success("データを正常に復元しました！")
-        st.rerun()
-    except Exception:
-      st.error("ファイルの読み込みに失敗しました。正しいJSONファイルを選択してください。")
 
-st.markdown("---")
-
-# --- 通算スタッツの表示 ---
+# --- 3. 通算スタッツの表示 ---
 total_goals = sum(m["goals"] for m in st.session_state.matches)
 total_matches = sum(m["count"] for m in st.session_state.matches)
 
@@ -90,16 +74,16 @@ if st.button("登録する"):
       "assists": assists,
   }
   st.session_state.matches.append(new_match)
-  st.success("試合データを登録しました！")
+  auto_save()  # 登録時に自動保存
+  st.success("試合データを登録し、URLに自動保存しました！")
   st.rerun()
 
-# --- 過去の試合一覧（カード風 ＆ 削除ボタン付き） ---
+# --- 過去の試合一覧 ---
 st.subheader("過去の試合一覧")
 
 if len(st.session_state.matches) == 0:
   st.info(
-      "まだ試合データが登録されていません。「登録する」で追加したあと、上の"
-      "「データの保存・読み込み」からファイルをダウンロードしておくと安心です。"
+      "まだ試合データが登録されていません。「登録する」を押すとデータが自動保存されます。"
   )
 else:
   for i, m in enumerate(st.session_state.matches):
@@ -117,4 +101,5 @@ else:
       # 削除ボタン
       if st.button("この試合を削除する", key=f"delete_{i}"):
         st.session_state.matches.pop(i)
+        auto_save()  # 削除時も自動保存
         st.rerun()
