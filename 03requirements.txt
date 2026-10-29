@@ -1,3 +1,0 @@
-streamlit
-st_gsheets_connection
-pandas
